@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -133,3 +135,74 @@ def simulate_valid_moderate_data(
         "Could not simulate a valid matrix after "
         f"{max_attempts} attempts."
     )
+
+
+def simulated_feature_matrix(data: SimulatedData) -> pd.DataFrame:
+    """Return simulated binary feature matrix in Bayser-compatible format."""
+
+    return pd.DataFrame(
+        data.Y,
+        index=data.grave_ids,
+        columns=data.type_ids,
+    ).reset_index(names="grave_id")
+
+
+def simulated_grave_truth(data: SimulatedData) -> pd.DataFrame:
+    """Return true assemblage-level quantities for recovery evaluation."""
+
+    true_rank = np.empty_like(data.true_order)
+    true_rank[data.true_order] = np.arange(1, len(data.true_order) + 1)
+
+    return pd.DataFrame(
+        {
+            "grave_id": data.grave_ids,
+            "true_t": data.true_t_observed,
+            "true_rank": true_rank,
+            "true_richness": data.true_richness_observed,
+            "observed_richness": data.Y.sum(axis=1),
+            "seed_used": data.seed_used,
+            "simulation_attempt": data.simulation_attempt,
+        }
+    ).sort_values("true_rank")
+
+
+def simulated_type_truth(data: SimulatedData) -> pd.DataFrame:
+    """Return true type-level quantities for recovery evaluation."""
+
+    true_type_rank = np.argsort(np.argsort(data.true_mu)) + 1
+
+    return pd.DataFrame(
+        {
+            "type_id": data.type_ids,
+            "true_mu": data.true_mu,
+            "true_sigma": data.true_sigma,
+            "true_a": data.true_a,
+            "true_type_rank": true_type_rank,
+        }
+    ).sort_values("true_type_rank")
+
+
+def write_simulated_dataset(
+    data: SimulatedData,
+    out_dir: str | Path,
+    *,
+    feature_filename: str = "features.csv",
+    grave_truth_filename: str = "grave_truth.csv",
+    type_truth_filename: str = "type_truth.csv",
+) -> dict[str, Path]:
+    """Write simulated dataset and truth tables to disk."""
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    paths = {
+        "features": out / feature_filename,
+        "grave_truth": out / grave_truth_filename,
+        "type_truth": out / type_truth_filename,
+    }
+
+    simulated_feature_matrix(data).to_csv(paths["features"], index=False)
+    simulated_grave_truth(data).to_csv(paths["grave_truth"], index=False)
+    simulated_type_truth(data).to_csv(paths["type_truth"], index=False)
+
+    return paths

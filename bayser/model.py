@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any
+
 import arviz as az
 import numpy as np
 import pandas as pd
@@ -19,11 +22,104 @@ from bayser.model_helpers import (
 
 
 # -----------------------------------------------------------------------------
-# Main model
+# Model build context
 # -----------------------------------------------------------------------------
 
 
-def fit_parametric_pymc_seriation(
+@dataclass
+class SeriationModelContext:
+    """Objects needed outside the PyMC graph for sampling and post-processing."""
+
+    initvals: dict[str, Any]
+
+    n_graves: int
+    n_types: int
+    n_c14_dated: int
+
+    draws: int
+    tune: int
+    chains: int
+    target_accept: float
+    random_seed: int
+    max_treedepth: int
+
+    include_richness: bool
+    repulsion_strength: float
+
+    chronology_mode: str
+    chronology_likelihood: str
+    use_chronology: bool
+
+    calendar_grid_step: int
+    local_window_padding: float
+    local_cal_lower: float | None
+    local_cal_upper: float | None
+
+    c14_index: np.ndarray
+    bp_dated: np.ndarray
+    err_dated: np.ndarray
+    cal_grid: np.ndarray
+    curve_age: np.ndarray
+    curve_sigma: np.ndarray
+    weights: np.ndarray
+    c14_extra_sigma: float
+
+    outlier_prior_for_model: np.ndarray | None
+    outlier_prior_dated: np.ndarray
+    use_outlier_model: bool
+    outlier_scale: float
+    outlier_nu: float
+
+    log_c14_given_cal: np.ndarray | None
+
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+
+
+def _validate_binary_matrix(Y: np.ndarray) -> np.ndarray:
+    Y = np.asarray(Y)
+
+    if Y.ndim != 2 or not set(np.unique(Y)).issubset({0, 1}):
+        raise ValueError("Y must be a binary two-dimensional matrix.")
+
+    return Y
+
+
+def _prepare_outlier_prior(
+    outlier_prior_by_grave: np.ndarray | None,
+    n_graves: int,
+) -> np.ndarray:
+    if outlier_prior_by_grave is None:
+        return np.zeros(n_graves, dtype=float)
+
+    out = np.asarray(outlier_prior_by_grave, dtype=float)
+
+    if out.ndim != 1:
+        raise ValueError("outlier_prior_by_grave must be one-dimensional.")
+
+    if len(out) != n_graves:
+        raise ValueError(
+            "outlier_prior_by_grave must have one value per grave "
+            f"({n_graves} expected, got {len(out)})."
+        )
+
+    if not np.all(np.isfinite(out)):
+        raise ValueError("outlier_prior_by_grave must contain only finite values.")
+
+    if np.any((out < 0.0) | (out > 1.0)):
+        raise ValueError("outlier_prior_by_grave values must lie between 0 and 1.")
+
+    return out
+
+
+# -----------------------------------------------------------------------------
+# Build PyMC model
+# -----------------------------------------------------------------------------
+
+
+def build_parametric_pymc_seriation_model(
     Y: np.ndarray,
     draws: int = 800,
     tune: int = 1_200,
@@ -63,11 +159,16 @@ def fit_parametric_pymc_seriation(
     a_mu_sigma: float = 1.0,
     a_hyper_sd_sigma: float = 1.0,
     richness_sigma: float = 0.5,
-) -> az.InferenceData:
-    Y = np.asarray(Y)
+    print_model_summary: bool = True,
+) -> tuple[pm.Model, SeriationModelContext]:
+    """Build the Bayser PyMC model without sampling it.
 
-    if Y.ndim != 2 or not set(np.unique(Y)).issubset({0, 1}):
-        raise ValueError("Y must be a binary two-dimensional matrix.")
+    This function is useful for generating model graphs with
+    `pm.model_to_graphviz(model)` and for separating model construction from
+    inference.
+    """
+
+    Y = _validate_binary_matrix(Y)
 
     if chronology_likelihood != "intcal20":
         raise ValueError("Only chronology_likelihood='intcal20' is supported.")
@@ -85,7 +186,7 @@ def fit_parametric_pymc_seriation(
     outlier_scale = 5.0
     outlier_nu = 5.0
 
-    initvals = {
+    initvals: dict[str, Any] = {
         "mu_log_sigma": float(np.log(sigma_mu_prior)),
         "sd_log_sigma": 0.35,
         "mu_a": float(a_mu_prior),
@@ -110,25 +211,10 @@ def fit_parametric_pymc_seriation(
     # Optional outlier-prior preparation
     # -------------------------------------------------------------------------
 
-    if outlier_prior_by_grave is None:
-        outlier_prior_by_grave_arr = np.zeros(n_graves, dtype=float)
-    else:
-        outlier_prior_by_grave_arr = np.asarray(outlier_prior_by_grave, dtype=float)
-
-        if outlier_prior_by_grave_arr.ndim != 1:
-            raise ValueError("outlier_prior_by_grave must be one-dimensional.")
-
-        if len(outlier_prior_by_grave_arr) != n_graves:
-            raise ValueError(
-                "outlier_prior_by_grave must have one value per grave "
-                f"({n_graves} expected, got {len(outlier_prior_by_grave_arr)})."
-            )
-
-        if not np.all(np.isfinite(outlier_prior_by_grave_arr)):
-            raise ValueError("outlier_prior_by_grave must contain only finite values.")
-
-        if np.any((outlier_prior_by_grave_arr < 0.0) | (outlier_prior_by_grave_arr > 1.0)):
-            raise ValueError("outlier_prior_by_grave values must lie between 0 and 1.")
+    outlier_prior_by_grave_arr = _prepare_outlier_prior(
+        outlier_prior_by_grave,
+        n_graves,
+    )
 
     # -------------------------------------------------------------------------
     # Optional C14 preparation
@@ -224,7 +310,7 @@ def fit_parametric_pymc_seriation(
             logit_sigma_cal_link=sigma_cal_link_logit_mu,
         )
 
-    coords = {
+    coords: dict[str, Any] = {
         "grave": np.arange(n_graves),
         "type": np.arange(n_types),
     }
@@ -237,32 +323,33 @@ def fit_parametric_pymc_seriation(
     # a full symbolic n_graves x n_graves distance matrix and triangular mask.
     repulsion_pair_i, repulsion_pair_j = np.triu_indices(n_graves, k=1)
 
-    if use_chronology:
-        print(
-            f"\nC14/calendar model: linked IntCal20, "
-            f"dated graves {n_c14_dated}/{n_graves}, grid {len(cal_grid)}"
-        )
-
-        if use_outlier_model:
+    if print_model_summary:
+        if use_chronology:
             print(
-                "outlier model: enabled for "
-                f"{int(np.sum(outlier_prior_dated > 0.0))}/{n_c14_dated} dated graves"
+                f"\nC14/calendar model: linked IntCal20, "
+                f"dated graves {n_c14_dated}/{n_graves}, grid {len(cal_grid)}"
             )
-        else:
-            print("outlier model: disabled")
-    elif c14_requested:
-        print(
-            "\nC14/calendar model requested, but no finite C14 dates were supplied. "
-            "Using typology only."
-        )
 
-    print("typological model: hierarchical type widths and amplitudes")
+            if use_outlier_model:
+                print(
+                    "outlier model: enabled for "
+                    f"{int(np.sum(outlier_prior_dated > 0.0))}/{n_c14_dated} dated graves"
+                )
+            else:
+                print("outlier model: disabled")
+        elif c14_requested:
+            print(
+                "\nC14/calendar model requested, but no finite C14 dates were supplied. "
+                "Using typology only."
+            )
+
+        print("typological model: hierarchical type widths and amplitudes")
 
     # -------------------------------------------------------------------------
     # PyMC model
     # -------------------------------------------------------------------------
 
-    with pm.Model(coords=coords):
+    with pm.Model(coords=coords) as model:
         # ------------------------------------------------------------------
         # Latent grave axis
         # ------------------------------------------------------------------
@@ -282,9 +369,16 @@ def fit_parametric_pymc_seriation(
                 pt.sum(t * pt.as_tensor_variable(ref_z)),
             )
 
+            #pm.Potential(
+            #    "axis_orientation",
+            #    pt.switch(score >= 0.0, 0.0, -np.inf),
+            #)
+
+            orientation_strength = 20.0
+
             pm.Potential(
                 "axis_orientation",
-                pt.switch(score >= 0.0, 0.0, -np.inf),
+                pm.math.log(pm.math.sigmoid(orientation_strength * score)),
             )
 
         repulsion_lp = pm.Deterministic(
@@ -467,42 +561,8 @@ def fit_parametric_pymc_seriation(
             dims=("grave", "type"),
         )
 
-        idata = pm.sample(
-            draws=draws,
-            tune=tune,
-            chains=chains,
-            target_accept=target_accept,
-            random_seed=random_seed,
-            return_inferencedata=True,
-            init="jitter+adapt_diag",
-            initvals=initvals,
-            nuts_sampler_kwargs={"max_treedepth": max_treedepth},
-        )
-
-    # -------------------------------------------------------------------------
-    # Post-hoc reconstruction of individual calendar draws
-    # -------------------------------------------------------------------------
-
-    if use_chronology:
-        idata = reconstruct_marginal_calendar_draws(
-            idata,
-            c14_index,
-            bp_dated,
-            err_dated,
-            cal_grid,
-            curve_age,
-            curve_sigma,
-            weights,
-            c14_extra_sigma=c14_extra_sigma,
-            random_seed=random_seed,
-            outlier_prior=outlier_prior_for_model,
-            outlier_scale=outlier_scale,
-            outlier_nu=outlier_nu,
-            log_c14_given_cal=log_c14_given_cal,
-        )
-
-    return store_model_attrs(
-        idata,
+    context = SeriationModelContext(
+        initvals=initvals,
         n_graves=n_graves,
         n_types=n_types,
         n_c14_dated=n_c14_dated,
@@ -521,9 +581,185 @@ def fit_parametric_pymc_seriation(
         local_window_padding=local_window_padding,
         local_cal_lower=cal_lo,
         local_cal_upper=cal_hi,
+        c14_index=c14_index,
+        bp_dated=bp_dated,
+        err_dated=err_dated,
+        cal_grid=cal_grid,
+        curve_age=curve_age,
+        curve_sigma=curve_sigma,
+        weights=weights,
+        c14_extra_sigma=c14_extra_sigma,
+        outlier_prior_for_model=outlier_prior_for_model,
+        outlier_prior_dated=outlier_prior_dated,
         use_outlier_model=use_outlier_model,
-        n_outlier_candidates=int(np.sum(outlier_prior_dated > 0.0)),
-        outlier_prior_sum=float(np.sum(outlier_prior_dated)),
         outlier_scale=outlier_scale,
         outlier_nu=outlier_nu,
+        log_c14_given_cal=log_c14_given_cal,
     )
+
+    return model, context
+
+
+# -----------------------------------------------------------------------------
+# Main fitting wrapper
+# -----------------------------------------------------------------------------
+
+
+def fit_parametric_pymc_seriation(
+    Y: np.ndarray,
+    draws: int = 800,
+    tune: int = 1_200,
+    chains: int = 4,
+    target_accept: float = 0.96,
+    random_seed: int = 123,
+    include_richness: bool = True,
+    repulsion_strength: float = 0.35,
+    chronology_mode: str = "none",
+    chronology_likelihood: str = "intcal20",
+    orientation_reference: np.ndarray | None = None,
+    c14_bp: np.ndarray | None = None,
+    c14_error: np.ndarray | None = None,
+    intcal20_curve: pd.DataFrame | None = None,
+    cal_alpha_mu: float | None = None,
+    cal_alpha_sigma: float = 120.0,
+    cal_span_mu: float | None = None,
+    cal_span_sigma: float = 80.0,
+    cal_span_lower: float = 5.0,
+    cal_span_upper: float = 220.0,
+    sigma_cal_link_mu: float = 60.0,
+    sigma_cal_link_sigma: float = 35.0,
+    sigma_cal_link_lower: float = 15.0,
+    sigma_cal_link_upper: float = 150.0,
+    c14_extra_sigma: float = 0.0,
+    outlier_prior_by_grave: np.ndarray | None = None,
+    local_window_padding: float = 500.0,
+    calendar_grid_step: int = 10,
+    max_treedepth: int = 12,
+    intercept_mu: float = -0.5,
+    intercept_sigma: float = 1.2,
+    mu_sigma: float = 2.0,
+    sigma_mu_prior: float = 0.70,
+    log_sigma_hyper_sigma: float = 0.70,
+    log_sigma_hyper_sd_sigma: float = 0.35,
+    a_mu_prior: float = 1.2,
+    a_mu_sigma: float = 1.0,
+    a_hyper_sd_sigma: float = 1.0,
+    richness_sigma: float = 0.5,
+    return_model: bool = False,
+) -> az.InferenceData | tuple[az.InferenceData, pm.Model]:
+    """Fit the Bayser PyMC model.
+
+    If `return_model=True`, return `(idata, model)`. This is useful when the
+    caller wants to inspect or visualise the PyMC model after fitting. Existing
+    callers that expect only `idata` remain unaffected.
+    """
+
+    model, context = build_parametric_pymc_seriation_model(
+        Y=Y,
+        draws=draws,
+        tune=tune,
+        chains=chains,
+        target_accept=target_accept,
+        random_seed=random_seed,
+        include_richness=include_richness,
+        repulsion_strength=repulsion_strength,
+        chronology_mode=chronology_mode,
+        chronology_likelihood=chronology_likelihood,
+        orientation_reference=orientation_reference,
+        c14_bp=c14_bp,
+        c14_error=c14_error,
+        intcal20_curve=intcal20_curve,
+        cal_alpha_mu=cal_alpha_mu,
+        cal_alpha_sigma=cal_alpha_sigma,
+        cal_span_mu=cal_span_mu,
+        cal_span_sigma=cal_span_sigma,
+        cal_span_lower=cal_span_lower,
+        cal_span_upper=cal_span_upper,
+        sigma_cal_link_mu=sigma_cal_link_mu,
+        sigma_cal_link_sigma=sigma_cal_link_sigma,
+        sigma_cal_link_lower=sigma_cal_link_lower,
+        sigma_cal_link_upper=sigma_cal_link_upper,
+        c14_extra_sigma=c14_extra_sigma,
+        outlier_prior_by_grave=outlier_prior_by_grave,
+        local_window_padding=local_window_padding,
+        calendar_grid_step=calendar_grid_step,
+        max_treedepth=max_treedepth,
+        intercept_mu=intercept_mu,
+        intercept_sigma=intercept_sigma,
+        mu_sigma=mu_sigma,
+        sigma_mu_prior=sigma_mu_prior,
+        log_sigma_hyper_sigma=log_sigma_hyper_sigma,
+        log_sigma_hyper_sd_sigma=log_sigma_hyper_sd_sigma,
+        a_mu_prior=a_mu_prior,
+        a_mu_sigma=a_mu_sigma,
+        a_hyper_sd_sigma=a_hyper_sd_sigma,
+        richness_sigma=richness_sigma,
+        print_model_summary=True,
+    )
+
+    with model:
+        idata = pm.sample(
+            draws=context.draws,
+            tune=context.tune,
+            chains=context.chains,
+            target_accept=context.target_accept,
+            random_seed=context.random_seed,
+            return_inferencedata=True,
+            init="jitter+adapt_diag",
+            initvals=context.initvals,
+            nuts_sampler_kwargs={"max_treedepth": context.max_treedepth},
+        )
+
+    # -------------------------------------------------------------------------
+    # Post-hoc reconstruction of individual calendar draws
+    # -------------------------------------------------------------------------
+
+    if context.use_chronology:
+        idata = reconstruct_marginal_calendar_draws(
+            idata,
+            context.c14_index,
+            context.bp_dated,
+            context.err_dated,
+            context.cal_grid,
+            context.curve_age,
+            context.curve_sigma,
+            context.weights,
+            c14_extra_sigma=context.c14_extra_sigma,
+            random_seed=context.random_seed,
+            outlier_prior=context.outlier_prior_for_model,
+            outlier_scale=context.outlier_scale,
+            outlier_nu=context.outlier_nu,
+            log_c14_given_cal=context.log_c14_given_cal,
+        )
+
+    idata = store_model_attrs(
+        idata,
+        n_graves=context.n_graves,
+        n_types=context.n_types,
+        n_c14_dated=context.n_c14_dated,
+        draws=context.draws,
+        tune=context.tune,
+        chains=context.chains,
+        target_accept=context.target_accept,
+        random_seed=context.random_seed,
+        max_treedepth=context.max_treedepth,
+        include_richness=context.include_richness,
+        repulsion_strength=context.repulsion_strength,
+        chronology_mode=context.chronology_mode,
+        chronology_likelihood=context.chronology_likelihood,
+        use_chronology=context.use_chronology,
+        calendar_grid_step=context.calendar_grid_step,
+        local_window_padding=context.local_window_padding,
+        local_cal_lower=context.local_cal_lower,
+        local_cal_upper=context.local_cal_upper,
+        use_outlier_model=context.use_outlier_model,
+        n_outlier_candidates=int(np.sum(context.outlier_prior_dated > 0.0)),
+        outlier_prior_sum=float(np.sum(context.outlier_prior_dated)),
+        outlier_scale=context.outlier_scale,
+        outlier_nu=context.outlier_nu,
+    )
+
+    if return_model:
+        return idata, model
+
+    return idata

@@ -15,6 +15,7 @@ from bayser.classical import classical_order, order_correlation
 from bayser.data import load_seriation_input
 from bayser.diagnostics import (
     build_outlier_table,
+    build_parameter_diagnostics,
     print_c14_diagnostics,
     print_matrix_diagnostics,
     print_sampling_diagnostics,
@@ -1102,7 +1103,8 @@ def run_analysis(args: argparse.Namespace) -> None:
     )
 
     compact_sampling = _compact_sampling_summary(idata)
-
+    parameter_diagnostics = build_parameter_diagnostics(idata)
+    
     posthoc_outlier_candidates = _print_posthoc_outlier_screening(args, summary)
 
     active_outliers = build_outlier_table(
@@ -1176,6 +1178,7 @@ def run_analysis(args: argparse.Namespace) -> None:
         "posthoc_outlier_candidates": posthoc_outlier_candidates,
         "active_outliers": active_outliers,
         "compact_sampling_summary": compact_sampling,
+        "parameter_diagnostics": parameter_diagnostics,
         "unmodelled_calibration": unmodelled,
         "c14_input": _c14_input_table(grave_ids, c14_bp, c14_error),
     }

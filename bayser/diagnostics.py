@@ -595,6 +595,91 @@ def print_outlier_diagnostics(
         round(float(rows[p_col].max()), 3),
     )
 
+def build_parameter_diagnostics(
+    idata: az.InferenceData,
+    vars_: list[str] | None = None,
+) -> pd.DataFrame | None:
+    """Return ArviZ parameter diagnostics as a machine-readable table.
+
+    This mirrors the diagnostic quantities printed in debug mode, but makes
+    them available for downstream workflows and paper-level reporting.
+
+    The table includes scalar and vector parameters where available, excluding
+    constant variables. For vector variables, ArviZ returns one row per indexed
+    element, e.g. t[0], t[1], ...
+    """
+
+    if not hasattr(idata, "posterior"):
+        return None
+
+    if vars_ is None:
+        vars_ = [
+            "t",
+            "mu",
+            "sigma",
+            "a",
+            "g",
+            "intercept",
+            "cal_alpha",
+            "cal_span",
+            "cal_beta",
+            "sigma_cal_link",
+            "sigma_cal_outlier",
+            "mu_log_sigma",
+            "sd_log_sigma",
+            "mu_a",
+            "sd_a",
+        ]
+
+        if _posterior_has(idata, "p_outlier"):
+            p = _draws(idata, "p_outlier")
+            if np.nanmax(p) > 1e-9:
+                vars_.append("p_outlier")
+
+        if _posterior_has(idata, "p_outlier_reconstructed"):
+            p = _draws(idata, "p_outlier_reconstructed")
+            if np.nanmax(p) > 1e-9:
+                vars_.append("p_outlier_reconstructed")
+
+    vars_ = _nonconstant_vars(idata, vars_)
+
+    if not vars_:
+        return None
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        diag = az.summary(
+            idata,
+            var_names=vars_,
+            round_to=None,
+        )
+
+    if diag is None or diag.empty:
+        return None
+
+    diag = (
+        diag
+        .reset_index(names="parameter")
+        .replace([np.inf, -np.inf], np.nan)
+    )
+
+    preferred = [
+        "parameter",
+        "mean",
+        "sd",
+        "hdi_3%",
+        "hdi_97%",
+        "mcse_mean",
+        "mcse_sd",
+        "ess_bulk",
+        "ess_tail",
+        "r_hat",
+    ]
+
+    cols = [c for c in preferred if c in diag.columns]
+    rest = [c for c in diag.columns if c not in cols]
+
+    return diag[cols + rest]
 
 # -----------------------------------------------------------------------------
 # Divergences and worst parameters

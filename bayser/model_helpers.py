@@ -379,6 +379,7 @@ def marginal_c14_loglike(
     )
 
     return log_num - log_den
+    #return log_num
 
 
 def marginalised_intcal20_logp(
