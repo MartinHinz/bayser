@@ -5,7 +5,10 @@ description = "Bayesian seriation with optional radiocarbon-informed chronology"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
-    { name = "Martin Hinz" }
+    { name = "Martin Hinz" },
+    { name = "Nils Müller Schessel" },
+    { name = "Mirco Brunner" },
+    { name = "Sophie C. Schmidt" },
 ]
 license = { text = "MIT" }
 keywords = [
