@@ -819,7 +819,7 @@ def fit_parametric_pymc_seriation(
                 target_accept=context.target_accept,
                 random_seed=context.random_seed,
                 return_inferencedata=True,
-                init="jitter+adapt_diag",
+                init="adapt_diag",
                 initvals=context.initvals,
                 progressbar=progress_callback is None,
                 callback=progress_callback,
