@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use BaySer, please cite it as below."
+title: "BaySer: Radiocarbon-informed Bayesian seriation"
+authors:
+  - family-names: Hinz
+    given-names: Martin
+  - family-names: Müller Schessel
+    given-names: Nils
+  - family-names: Brunner
+    given-names: Mirco
+  - family-names: Schmidt
+    given-names: Sophie C.
+version: 0.1.0
+date-released: 2026-05-19
