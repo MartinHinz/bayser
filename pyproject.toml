@@ -55,3 +55,8 @@ package = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["bayser"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.13",
+]
