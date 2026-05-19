@@ -1,4 +1,4 @@
-# BaySer
+# BaySer <img src="BaySer_logo_small.png" align="right" />
 
 BaySer is a Python package for Bayesian seriation of archaeological assemblages, with optional radiocarbon-informed calendar modelling.
 
