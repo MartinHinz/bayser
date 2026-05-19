@@ -222,8 +222,14 @@ BaySer is under active development. The command-line interface and result file n
 
 ## Citation
 
-A formal software citation will be added before release. For now, please cite the associated manuscript or the GitHub repository version used for your analysis.
+If you use Bayser, please cite the software using the metadata provided in `CITATION.cff`.
+
+GitHub will display the recommended citation automatically when the repository is public. The citation information can also be exported from the repository page via **Cite this repository**.
+
+If your work uses the example datasets or the IntCal20 calibration curve, please also cite the relevant original sources listed below.
 
 ## License
 
-License information will be added before public release.
+Bayser source code is released under the MIT License.
+
+The example datasets and calibration data are included for demonstration and reproducibility. They should be cited according to their original sources and may be subject to their own reuse conditions.
