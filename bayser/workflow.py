@@ -1030,6 +1030,8 @@ def run_analysis(args: argparse.Namespace) -> None:
         c14_error=c14_error,
     )
 
+    progress_file = Path(getattr(args, "results_dir", "results")) / "progress.json"
+
     fit_kwargs = dict(
         Y=Y,
         draws=args.draws,
@@ -1050,6 +1052,7 @@ def run_analysis(args: argparse.Namespace) -> None:
         local_window_padding=args.local_window_padding,
         max_treedepth=args.max_treedepth,
         outlier_prior_by_grave=outlier_prior_by_grave,
+        progress_file=progress_file,
     )
 
     if _is_verbose(args) or _is_debug(args):

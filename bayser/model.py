@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import arviz as az
@@ -71,6 +74,106 @@ class SeriationModelContext:
     outlier_nu: float
 
     log_c14_given_cal: np.ndarray | None
+
+
+# -----------------------------------------------------------------------------
+# Progress callback
+# -----------------------------------------------------------------------------
+
+
+class JsonProgressCallback:
+    """Write PyMC sampling progress to a JSON file.
+
+    This is intended for lightweight frontends such as Streamlit. It does not
+    depend on PyMC's textual progress bar and can therefore be used while stdout
+    is suppressed by the CLI workflow.
+    """
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        draws: int,
+        tune: int,
+        chains: int,
+        throttle_seconds: float = 0.25,
+    ) -> None:
+        self.path = Path(path)
+        self.draws = int(draws)
+        self.tune = int(tune)
+        self.chains = int(chains)
+        self.throttle_seconds = float(throttle_seconds)
+
+        self.total = max(1, self.chains * (self.draws + self.tune))
+        self.done = 0
+        self.last_write = 0.0
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._write(status="initialising", phase="initialising")
+
+    def __call__(self, trace, draw) -> None:
+        """PyMC callback signature: callback(trace, draw)."""
+
+        self.done += 1
+
+        now = time.time()
+        if now - self.last_write < self.throttle_seconds and self.done < self.total:
+            return
+
+        tuning = bool(getattr(draw, "tuning", False))
+        phase = "tuning" if tuning else "sampling"
+
+        self._write(
+            status="running",
+            phase=phase,
+            chain=getattr(draw, "chain", None),
+            draw=getattr(draw, "draw_idx", getattr(draw, "draw", None)),
+            tuning=tuning,
+        )
+
+    def finish(self) -> None:
+        self.done = self.total
+        self._write(status="finished", phase="finished")
+
+    def fail(self, message: str) -> None:
+        self._write(status="failed", phase="failed", message=message)
+
+    def _write(
+        self,
+        *,
+        status: str,
+        phase: str | None = None,
+        chain: int | None = None,
+        draw: int | None = None,
+        tuning: bool | None = None,
+        message: str | None = None,
+    ) -> None:
+        self.last_write = time.time()
+
+        progress = min(1.0, max(0.0, self.done / self.total))
+
+        payload: dict[str, Any] = {
+            "status": status,
+            "phase": phase,
+            "done": int(self.done),
+            "total": int(self.total),
+            "progress": float(progress),
+            "percent": float(progress * 100.0),
+            "chains": int(self.chains),
+            "draws": int(self.draws),
+            "tune": int(self.tune),
+            "chain": chain,
+            "draw": draw,
+            "tuning": tuning,
+            "updated_at": self.last_write,
+        }
+
+        if message is not None:
+            payload["message"] = message
+
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        tmp.replace(self.path)
 
 
 # -----------------------------------------------------------------------------
@@ -369,11 +472,6 @@ def build_parametric_pymc_seriation_model(
                 pt.sum(t * pt.as_tensor_variable(ref_z)),
             )
 
-            #pm.Potential(
-            #    "axis_orientation",
-            #    pt.switch(score >= 0.0, 0.0, -np.inf),
-            #)
-
             orientation_strength = 20.0
 
             pm.Potential(
@@ -646,12 +744,17 @@ def fit_parametric_pymc_seriation(
     a_hyper_sd_sigma: float = 1.0,
     richness_sigma: float = 0.5,
     return_model: bool = False,
+    progress_file: str | Path | None = None,
 ) -> az.InferenceData | tuple[az.InferenceData, pm.Model]:
     """Fit the Bayser PyMC model.
 
     If `return_model=True`, return `(idata, model)`. This is useful when the
     caller wants to inspect or visualise the PyMC model after fitting. Existing
     callers that expect only `idata` remain unaffected.
+
+    If `progress_file` is supplied, sampling progress is written to this JSON
+    file via a PyMC callback. This is intended for web frontends and avoids
+    relying on PyMC's terminal progress bar.
     """
 
     model, context = build_parametric_pymc_seriation_model(
@@ -697,18 +800,38 @@ def fit_parametric_pymc_seriation(
         print_model_summary=True,
     )
 
-    with model:
-        idata = pm.sample(
+    progress_callback = None
+    if progress_file is not None:
+        progress_callback = JsonProgressCallback(
+            progress_file,
             draws=context.draws,
             tune=context.tune,
             chains=context.chains,
-            target_accept=context.target_accept,
-            random_seed=context.random_seed,
-            return_inferencedata=True,
-            init="jitter+adapt_diag",
-            initvals=context.initvals,
-            nuts_sampler_kwargs={"max_treedepth": context.max_treedepth},
         )
+
+    try:
+        with model:
+            idata = pm.sample(
+                draws=context.draws,
+                tune=context.tune,
+                chains=context.chains,
+                target_accept=context.target_accept,
+                random_seed=context.random_seed,
+                return_inferencedata=True,
+                init="jitter+adapt_diag",
+                initvals=context.initvals,
+                progressbar=progress_callback is None,
+                callback=progress_callback,
+                nuts={"max_treedepth": context.max_treedepth},
+            )
+
+        if progress_callback is not None:
+            progress_callback.finish()
+
+    except Exception as exc:
+        if progress_callback is not None:
+            progress_callback.fail(str(exc))
+        raise
 
     # -------------------------------------------------------------------------
     # Post-hoc reconstruction of individual calendar draws
