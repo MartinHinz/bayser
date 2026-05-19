@@ -1,18 +1,35 @@
 # Python-generated files
 __pycache__/
-*.py[oc]
+*.py[cod]
+*$py.class
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
-# Virtual environments
-.venv
+# Virtual environments and tooling
+.venv/
+.uv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Output Data
+# Output data
 plots*/
 results*/
 outputs/
+logs/
+*.zip
 
-# Others
+# Large/intermediate model outputs
+*.nc
+*.netcdf
+*.pkl
+*.pickle
+
+# OS/editor files
 .DS_Store
+.vscode/
+.idea/
