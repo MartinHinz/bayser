@@ -25,10 +25,7 @@ class SeriationData:
 
 
 def normalise_column_names(columns: list[str]) -> list[str]:
-    return [
-        str(c).strip().replace("+/-", "±").replace("+-", "±")
-        for c in columns
-    ]
+    return [str(c).strip().replace("+/-", "±").replace("+-", "±") for c in columns]
 
 
 def read_id_indexed_csv(
@@ -179,7 +176,9 @@ def _load_c14_aligned(
     c14_aligned = c14.reindex(grave_ids)
 
     c14_bp = pd.to_numeric(c14_aligned[bp_col], errors="coerce").to_numpy(dtype=float)
-    c14_error = pd.to_numeric(c14_aligned[error_col], errors="coerce").to_numpy(dtype=float)
+    c14_error = pd.to_numeric(c14_aligned[error_col], errors="coerce").to_numpy(
+        dtype=float
+    )
 
     finite_bp = np.isfinite(c14_bp)
     finite_error = np.isfinite(c14_error)
@@ -224,9 +223,7 @@ def load_seriation_input(
     )
 
     feature_numeric = (
-        features[feature_cols]
-        .apply(pd.to_numeric, errors="coerce")
-        .fillna(0)
+        features[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
     )
 
     counts_all = feature_numeric.to_numpy(dtype=float)
@@ -267,7 +264,9 @@ def load_seriation_input(
         )
 
         original_counts = counts_all[np.ix_(grave_keep, type_keep)]
-        removed_grave_ids = [g for g, keep in zip(grave_ids_all, grave_keep) if not keep]
+        removed_grave_ids = [
+            g for g, keep in zip(grave_ids_all, grave_keep) if not keep
+        ]
         removed_type_ids = [t for t, keep in zip(type_ids_all, type_keep) if not keep]
 
         c14_bp = c14_bp_all[grave_keep] if c14_bp_all is not None else None

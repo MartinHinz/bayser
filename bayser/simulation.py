@@ -47,8 +47,7 @@ def simulate_moderate_data(
         intercept
         + richness_sorted[:, None]
         + a[None, :]
-        - ((t_sorted[:, None] - mu[None, :]) ** 2)
-        / (2.0 * sigma[None, :] ** 2)
+        - ((t_sorted[:, None] - mu[None, :]) ** 2) / (2.0 * sigma[None, :] ** 2)
     )
 
     p = logistic(eta)
@@ -132,8 +131,7 @@ def simulate_valid_moderate_data(
             return data
 
     raise RuntimeError(
-        "Could not simulate a valid matrix after "
-        f"{max_attempts} attempts."
+        f"Could not simulate a valid matrix after {max_attempts} attempts."
     )
 
 

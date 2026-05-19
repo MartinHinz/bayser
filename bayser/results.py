@@ -243,17 +243,6 @@ def write_results(
         metadata={...},
     )
 
-    Backwards-compatible explicit API
-    ---------------------------------
-    write_results(
-        results_dir=...,
-        args=args,
-        idata=idata,
-        grave_summary=grave_summary,
-        type_summary=type_summary,
-        ...
-    )
-
     Empty or missing tables are skipped. Metadata is always written as both
     ``run_metadata.json`` and ``metadata.csv``.
     """

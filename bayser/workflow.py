@@ -86,7 +86,9 @@ def _finite_c14(c14_bp, c14_error) -> np.ndarray:
     )
 
 
-def _by_grave(table: pd.DataFrame | None, grave_ids: list[str], col: str) -> np.ndarray | None:
+def _by_grave(
+    table: pd.DataFrame | None, grave_ids: list[str], col: str
+) -> np.ndarray | None:
     if table is None or col not in table.columns:
         return None
 
@@ -219,15 +221,20 @@ def _load_data(args: argparse.Namespace):
         _print(
             args,
             "Input:",
-            f"{data.Y.shape[0]} graves × {data.Y.shape[1]} types;",
+            f"{data.Y.shape[0]} assemblages × {data.Y.shape[1]} types;",
             f"{int(finite.sum())} finite C14 dates",
         )
 
         if getattr(data, "removed_grave_ids", None):
-            _print(args, f"Removed graves during preparation: {len(data.removed_grave_ids)}")
+            _print(
+                args,
+                f"Removed assemblages during preparation: {len(data.removed_grave_ids)}",
+            )
 
         if getattr(data, "removed_type_ids", None):
-            _print(args, f"Removed types during preparation: {len(data.removed_type_ids)}")
+            _print(
+                args, f"Removed types during preparation: {len(data.removed_type_ids)}"
+            )
 
         if getattr(data, "unmatched_c14_ids", None):
             _print(args, f"Unmatched C14 IDs: {len(data.unmatched_c14_ids)}")
@@ -287,11 +294,13 @@ def _calibrate_unmodelled(
 
 
 # -----------------------------------------------------------------------------
-# Outlier CLI bridge
+# Outlier specifications
 # -----------------------------------------------------------------------------
 
 
-def _parse_outlier_spec(spec: str, default_probability: float = 0.5) -> tuple[str, float]:
+def _parse_outlier_spec(
+    spec: str, default_probability: float = 0.5
+) -> tuple[str, float]:
     """Parse one CLI outlier specification.
 
     Accepted forms:
@@ -315,9 +324,13 @@ def _parse_outlier_spec(spec: str, default_probability: float = 0.5) -> tuple[st
         raise ValueError(f"Invalid outlier specification: {spec!r}")
 
     if len(parts) == 1:
-        return grave_id, _validate_probability(default_probability, "default outlier prior")
+        return grave_id, _validate_probability(
+            default_probability, "default outlier prior"
+        )
 
-    return grave_id, _validate_probability(parts[1].strip(), f"outlier prior for {grave_id}")
+    return grave_id, _validate_probability(
+        parts[1].strip(), f"outlier prior for {grave_id}"
+    )
 
 
 def _build_outlier_prior_by_grave(
@@ -329,7 +342,7 @@ def _build_outlier_prior_by_grave(
     """Construct the model-level outlier prior vector.
 
     Default is all zero, i.e. no outlier model. The outlier component is only
-    activated in model.py if at least one dated grave has prior > 0.
+    activated in model.py if at least one dated assemblage has prior > 0.
     """
 
     n_graves = len(grave_ids)
@@ -345,7 +358,9 @@ def _build_outlier_prior_by_grave(
         p = _validate_probability(outlier_all, "--outlier-all")
 
         if not finite_c14.any():
-            raise ValueError("--outlier-all was supplied, but there are no finite C14 dates.")
+            raise ValueError(
+                "--outlier-all was supplied, but there are no finite C14 dates."
+            )
 
         out[finite_c14] = p
 
@@ -354,7 +369,7 @@ def _build_outlier_prior_by_grave(
 
         if grave_id not in id_to_index:
             raise ValueError(
-                f"Outlier candidate {grave_id!r} is not present in the retained grave IDs."
+                f"Outlier candidate {grave_id!r} is not present in the retained assemblage IDs."
             )
 
         idx = id_to_index[grave_id]
@@ -381,7 +396,10 @@ def _build_outlier_prior_by_grave(
         _print(args, "\nOutlier model requested for:")
         _print(args, table.to_string(index=False))
     else:
-        _print(args, "\nOutlier model: not requested; running default non-outlier chronology.")
+        _print(
+            args,
+            "\nOutlier model: not requested; running default non-outlier chronology.",
+        )
 
     return out
 
@@ -400,17 +418,29 @@ def _orient_by_c14(
     cal = _by_grave(unmodelled, grave_ids, "unmodelled_cal_bp_mean")
 
     if cal is None:
-        return row_scores, col_scores, "RA/CA axis retained; no calibrated C14 reference."
+        return (
+            row_scores,
+            col_scores,
+            "RA/CA axis retained; no calibrated C14 reference.",
+        )
 
     keep = np.isfinite(row_scores) & np.isfinite(cal)
 
     if keep.sum() < 5:
-        return row_scores, col_scores, f"RA/CA axis retained; too few C14 dates n={keep.sum()}."
+        return (
+            row_scores,
+            col_scores,
+            f"RA/CA axis retained; too few C14 dates n={keep.sum()}.",
+        )
 
     rho = spearmanr(row_scores[keep], cal[keep]).statistic
 
     if not np.isfinite(rho) or abs(float(rho)) < 0.25:
-        return row_scores, col_scores, f"RA/CA axis retained; weak C14 trend rho={rho:.3f}."
+        return (
+            row_scores,
+            col_scores,
+            f"RA/CA axis retained; weak C14 trend rho={rho:.3f}.",
+        )
 
     if rho > 0:
         return -row_scores, -col_scores, f"RA/CA axis flipped; rho={rho:.3f}."
@@ -418,7 +448,9 @@ def _orient_by_c14(
     return row_scores, col_scores, f"RA/CA axis retained; rho={rho:.3f}."
 
 
-def _merge_unmodelled(summary: pd.DataFrame, unmodelled: pd.DataFrame | None) -> pd.DataFrame:
+def _merge_unmodelled(
+    summary: pd.DataFrame, unmodelled: pd.DataFrame | None
+) -> pd.DataFrame:
     if unmodelled is None:
         return summary
 
@@ -484,7 +516,7 @@ def _print_main_tables(
         ],
     )
 
-    print("\nPosterior grave order summary:")
+    print("\nPosterior assemblage order summary:")
     print(summary[grave_cols].head(25).to_string(index=False))
 
     print("\nPosterior type summary:")
@@ -536,7 +568,7 @@ def _print_compact_result_summary(
     )
 
     if cols:
-        print("\nPosterior grave order, first 12:")
+        print("\nPosterior assemblage order, first 12:")
         print(summary[cols].head(12).round(3).to_string(index=False))
 
 
@@ -577,7 +609,7 @@ def _print_shift_summary(
 
 
 def _build_posthoc_outlier_candidates(summary: pd.DataFrame) -> pd.DataFrame:
-    """Cheap post-hoc screen for candidates worth rerunning with --outlier.
+    """Build a heuristic post-hoc screen for possible outlier candidates.
 
     This does not change the model. It only flags cases where the typological
     expectation and the single-date calibration pull strongly in different
@@ -610,14 +642,12 @@ def _build_posthoc_outlier_candidates(summary: pd.DataFrame) -> pd.DataFrame:
     )
 
     s["expected_outside_unmodelled_hdi"] = (
-        (s["expected_cal_bp_mean"] < s["unmodelled_cal_bp_hdi_3"])
-        | (s["expected_cal_bp_mean"] > s["unmodelled_cal_bp_hdi_97"])
-    )
+        s["expected_cal_bp_mean"] < s["unmodelled_cal_bp_hdi_3"]
+    ) | (s["expected_cal_bp_mean"] > s["unmodelled_cal_bp_hdi_97"])
 
     s["posterior_outside_unmodelled_hdi"] = (
-        (s["posterior_cal_bp_mean"] < s["unmodelled_cal_bp_hdi_3"])
-        | (s["posterior_cal_bp_mean"] > s["unmodelled_cal_bp_hdi_97"])
-    )
+        s["posterior_cal_bp_mean"] < s["unmodelled_cal_bp_hdi_3"]
+    ) | (s["posterior_cal_bp_mean"] > s["unmodelled_cal_bp_hdi_97"])
 
     s["max_abs_conflict"] = np.maximum(
         s["shift_model_vs_expected"].abs(),
@@ -660,10 +690,14 @@ def _build_posthoc_outlier_candidates(summary: pd.DataFrame) -> pd.DataFrame:
         "",
     )
 
-    priority = pd.Series(
-        s["posthoc_outlier_suggestion"],
-        index=s.index,
-    ).map({"strong": 0, "possible": 1}).fillna(9)
+    priority = (
+        pd.Series(
+            s["posthoc_outlier_suggestion"],
+            index=s.index,
+        )
+        .map({"strong": 0, "possible": 1})
+        .fillna(9)
+    )
 
     return (
         s[s["posthoc_outlier_suggestion"] != ""]
@@ -860,10 +894,14 @@ def _make_plots(
     ra_method: str,
 ) -> None:
     plot_matrix(Y, np.arange(Y.shape[0]), "Dataset: input order")
-    plot_matrix(Y, ra_order, f"Dataset: {ra_method} order", type_order=np.argsort(col_scores))
+    plot_matrix(
+        Y, ra_order, f"Dataset: {ra_method} order", type_order=np.argsort(col_scores)
+    )
     plot_matrix(Y, pymc_order, "Dataset: PyMC posterior order")
 
-    plot_pymc_vs_ra_scores(score_comparison, "Dataset: PyMC posterior axis vs RA/CA axis")
+    plot_pymc_vs_ra_scores(
+        score_comparison, "Dataset: PyMC posterior axis vs RA/CA axis"
+    )
 
     plot_posterior_rank_distributions(
         idata,
@@ -895,7 +933,11 @@ def _make_plots(
 
     if any(
         c in summary.columns
-        for c in ["posterior_cal_bp_mean", "expected_cal_bp_mean", "unmodelled_cal_bp_mean"]
+        for c in [
+            "posterior_cal_bp_mean",
+            "expected_cal_bp_mean",
+            "unmodelled_cal_bp_mean",
+        ]
     ):
         plot_posterior_cal_bp_against_order(
             summary=summary,
@@ -1068,10 +1110,18 @@ def run_analysis(args: argparse.Namespace) -> None:
             grave_ids=grave_ids,
             c14_bp=c14_bp,
             c14_error=c14_error,
-            unmodelled_cal_bp_mean=_by_grave(unmodelled, grave_ids, "unmodelled_cal_bp_mean"),
-            unmodelled_cal_bp_sd=_by_grave(unmodelled, grave_ids, "unmodelled_cal_bp_sd"),
-            unmodelled_cal_bp_hdi_3=_by_grave(unmodelled, grave_ids, "unmodelled_cal_bp_hdi_3"),
-            unmodelled_cal_bp_hdi_97=_by_grave(unmodelled, grave_ids, "unmodelled_cal_bp_hdi_97"),
+            unmodelled_cal_bp_mean=_by_grave(
+                unmodelled, grave_ids, "unmodelled_cal_bp_mean"
+            ),
+            unmodelled_cal_bp_sd=_by_grave(
+                unmodelled, grave_ids, "unmodelled_cal_bp_sd"
+            ),
+            unmodelled_cal_bp_hdi_3=_by_grave(
+                unmodelled, grave_ids, "unmodelled_cal_bp_hdi_3"
+            ),
+            unmodelled_cal_bp_hdi_97=_by_grave(
+                unmodelled, grave_ids, "unmodelled_cal_bp_hdi_97"
+            ),
         )
 
     summary = summarise_graves(idata, grave_ids, ra_row_scores=row_scores)
@@ -1107,7 +1157,7 @@ def run_analysis(args: argparse.Namespace) -> None:
 
     compact_sampling = _compact_sampling_summary(idata)
     parameter_diagnostics = build_parameter_diagnostics(idata)
-    
+
     posthoc_outlier_candidates = _print_posthoc_outlier_screening(args, summary)
 
     active_outliers = build_outlier_table(
@@ -1115,7 +1165,9 @@ def run_analysis(args: argparse.Namespace) -> None:
         grave_ids=grave_ids,
         c14_bp=c14_bp,
         c14_error=c14_error,
-        unmodelled_cal_bp_mean=_by_grave(unmodelled, grave_ids, "unmodelled_cal_bp_mean"),
+        unmodelled_cal_bp_mean=_by_grave(
+            unmodelled, grave_ids, "unmodelled_cal_bp_mean"
+        ),
         unmodelled_cal_bp_sd=_by_grave(unmodelled, grave_ids, "unmodelled_cal_bp_sd"),
     )
 
@@ -1134,11 +1186,11 @@ def run_analysis(args: argparse.Namespace) -> None:
 
         print("\nLargest PyMC–RA rank differences:")
         print(
-            score_comparison
-            .assign(abs_diff=lambda d: d["rank_difference_pymc_minus_ra"].abs())
+            score_comparison.assign(
+                abs_diff=lambda d: d["rank_difference_pymc_minus_ra"].abs()
+            )
             .sort_values("abs_diff", ascending=False)
-            .head(15)
-            [
+            .head(15)[
                 [
                     "grave_id",
                     "pymc_rank",

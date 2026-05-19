@@ -7,7 +7,7 @@ from bayser.workflow import run_analysis
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the Bayesian seriation MVP workflow.",
+        description="Run the Bayesian seriation workflow.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -62,7 +62,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     # -------------------------------------------------------------------------
 
     parser.add_argument("--repulsion-strength", type=float, default=0.35)
-    parser.add_argument("--include-richness", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--include-richness", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--calendar-grid-step", type=int, default=10)
     parser.add_argument("--local-window-padding", type=float, default=500.0)
 
@@ -76,7 +78,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="GRAVE_ID[:PRIOR]",
         help=(
-            "Enable the OxCal-style outlier component for one retained dated grave. "
+            "Enable the OxCal-style outlier component for one retained dated assemblage. "
             "Use GRAVE_ID or GRAVE_ID:PRIOR, for example ASO_6 or ASO_6:0.5. "
             "If PRIOR is omitted, 0.5 is used. Can be repeated."
         ),
@@ -88,7 +90,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PRIOR",
         help=(
-            "Convenience option: enable the outlier component for all retained dated graves "
+            "Convenience option: enable the outlier component for all retained dated assemblages "
             "with the same prior probability, for example --outlier-all 0.05."
         ),
     )
@@ -109,9 +111,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help=(
-            "Print additional input, calibration, posterior, and outlier tables."
-        ),
+        help=("Print additional input, calibration, posterior, and outlier tables."),
     )
 
     parser.add_argument(
@@ -136,7 +136,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     # -------------------------------------------------------------------------
 
     parser.add_argument("--results-dir", default="results")
-    parser.add_argument("--no-results",  action="store_true")
+    parser.add_argument("--no-results", action="store_true")
 
     return parser
 

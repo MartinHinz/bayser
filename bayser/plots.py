@@ -87,13 +87,15 @@ def _err(mean, lower, upper) -> np.ndarray:
     )
 
 
-def _ordered(summary: pd.DataFrame, order: np.ndarray, grave_ids: list[str]) -> pd.DataFrame:
+def _ordered(
+    summary: pd.DataFrame, order: np.ndarray, grave_ids: list[str]
+) -> pd.DataFrame:
     ids = [grave_ids[i] for i in order]
     s = summary.set_index("grave_id")
 
     missing = [g for g in ids if g not in s.index]
     if missing:
-        raise ValueError("Summary is missing grave_ids: " + ", ".join(missing[:10]))
+        raise ValueError("Summary is missing assemblage IDs: " + ", ".join(missing[:10]))
 
     return s.loc[ids].copy()
 
@@ -102,7 +104,9 @@ def _width(n: int, min_width: float = 12, max_width: float = 32) -> float:
     return max(min_width, min(max_width, n * 0.28))
 
 
-def _xticks(ax: plt.Axes, x: np.ndarray, labels: list[str], max_labels: int = 80) -> None:
+def _xticks(
+    ax: plt.Axes, x: np.ndarray, labels: list[str], max_labels: int = 80
+) -> None:
     if len(labels) <= max_labels:
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=90, fontsize=8)
@@ -186,7 +190,7 @@ def plot_matrix(
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.imshow(Y_ord[:, type_order], aspect="auto", interpolation="nearest")
     ax.set_xlabel("Types")
-    ax.set_ylabel("Graves")
+    ax.set_ylabel("Assemblages")
     ax.set_title(title)
 
     _finish(fig, title)
@@ -248,7 +252,7 @@ def plot_posterior_rank_distributions(
         zorder=3,
     )
 
-    ax.set_xlabel("Graves ordered by PyMC posterior mean position")
+    ax.set_xlabel("Assemblages ordered by PyMC posterior mean position")
     ax.set_ylabel("Posterior rank")
     ax.set_title(title)
     ax.invert_yaxis()
@@ -486,9 +490,8 @@ def plot_unmodelled_vs_modelled_cal_bp(
 
     df["shift"] = y - x
 
-    label_rows = (
-        df.assign(abs_shift=lambda d: d["shift"].abs())
-        .nlargest(label_n, "abs_shift")
+    label_rows = df.assign(abs_shift=lambda d: d["shift"].abs()).nlargest(
+        label_n, "abs_shift"
     )
 
     for _, row in label_rows.iterrows():
@@ -533,10 +536,9 @@ def plot_model_shift_against_rank(
     plotted = False
 
     if has_expected:
-        y = (
-            ordered["posterior_cal_bp_mean"].to_numpy(float)
-            - ordered["expected_cal_bp_mean"].to_numpy(float)
-        )
+        y = ordered["posterior_cal_bp_mean"].to_numpy(float) - ordered[
+            "expected_cal_bp_mean"
+        ].to_numpy(float)
         keep = np.isfinite(y)
 
         if np.any(keep):
@@ -548,10 +550,9 @@ def plot_model_shift_against_rank(
             plotted = True
 
     if has_unmodelled:
-        y = (
-            ordered["posterior_cal_bp_mean"].to_numpy(float)
-            - ordered["unmodelled_cal_bp_mean"].to_numpy(float)
-        )
+        y = ordered["posterior_cal_bp_mean"].to_numpy(float) - ordered[
+            "unmodelled_cal_bp_mean"
+        ].to_numpy(float)
         keep = np.isfinite(y)
 
         if np.any(keep):

@@ -26,7 +26,7 @@ def print_matrix_diagnostics(Y: np.ndarray, label: str = "Matrix") -> None:
         int(type_counts.max()),
     )
     print(
-        "Grave richness, min/median/max:",
+        "Assemblage richness, min/median/max:",
         int(grave_counts.min()),
         float(np.median(grave_counts)),
         int(grave_counts.max()),
@@ -45,21 +45,8 @@ def print_type_diagnostics(
         .reset_index(drop=True)
     )
 
-    suspicious = [
-        t
-        for t in type_ids
-        if t != t.strip()
-        or t.strip().lower()
-        in {"silber", "gold", "schräg durchlocht", "schraeg durchlocht"}
-        or len(t.strip()) <= 3
-    ]
-
     print("\nType diagnostics:")
     print("Retained type columns:", len(type_ids))
-    print(
-        "Suspicious retained type names:",
-        ", ".join(suspicious[:30]) if suspicious else "none detected",
-    )
 
     print("\nMost frequent retained types:")
     print(table.head(n).to_string(index=False))
@@ -77,7 +64,9 @@ def print_c14_diagnostics(data) -> None:
     c14_error = np.asarray(data.c14_error, dtype=float)
     finite = np.isfinite(c14_bp) & np.isfinite(c14_error)
 
-    print("C14 columns:", {"id": data.id_col, "bp": data.bp_col, "error": data.error_col})
+    print(
+        "C14 columns:", {"id": data.id_col, "bp": data.bp_col, "error": data.error_col}
+    )
     print("C14 dates, finite/total:", int(finite.sum()), "/", len(c14_bp))
 
     if not finite.any():
@@ -110,9 +99,9 @@ def print_c14_diagnostics(data) -> None:
     print("\nYoungest retained C14 dates:")
     print(table.sort_values("c14_bp", ascending=True).head(10).to_string(index=False))
 
-    print("Removed graves during preparation:", len(data.removed_grave_ids))
+    print("Removed assemblages during preparation:", len(data.removed_grave_ids))
     if data.removed_grave_ids:
-        print("Removed graves, first 20:", ", ".join(data.removed_grave_ids[:20]))
+        print("Removed assemblages, first 20:", ", ".join(data.removed_grave_ids[:20]))
 
     print("Removed types during preparation:", len(data.removed_type_ids))
     if data.removed_type_ids:
@@ -208,7 +197,9 @@ def _posterior_rank(idata: az.InferenceData) -> np.ndarray | None:
     return rank
 
 
-def _c14_indices_from_da(idata: az.InferenceData, var: str, n_c14: int, n_graves: int) -> np.ndarray:
+def _c14_indices_from_da(
+    idata: az.InferenceData, var: str, n_c14: int, n_graves: int
+) -> np.ndarray:
     da = idata.posterior[var]
 
     if "c14_grave" in da.coords:
@@ -290,7 +281,9 @@ def print_prior_metadata(idata: az.InferenceData) -> None:
         print(pd.DataFrame(rows).to_string(index=False))
 
 
-def print_scalar_diagnostics(idata: az.InferenceData, include_richness: bool = True) -> None:
+def print_scalar_diagnostics(
+    idata: az.InferenceData, include_richness: bool = True
+) -> None:
     vars_ = ["intercept"]
 
     if include_richness:
@@ -416,7 +409,9 @@ def build_outlier_table(
     if posterior_rank is None:
         posterior_rank_full = _posterior_rank(idata)
     else:
-        posterior_rank_full = _optional_vector(posterior_rank, n_graves, "posterior_rank")
+        posterior_rank_full = _optional_vector(
+            posterior_rank, n_graves, "posterior_rank"
+        )
 
     rows = pd.DataFrame({"grave_index": c14_index})
 
@@ -476,7 +471,9 @@ def build_outlier_table(
     if unmodelled_sd_full is not None:
         rows["unmodelled_cal_bp_sd"] = unmodelled_sd_full[c14_index].astype(float)
 
-    if _posterior_has(idata, "expected_cal_bp") and _posterior_has(idata, "latent_cal_bp"):
+    if _posterior_has(idata, "expected_cal_bp") and _posterior_has(
+        idata, "latent_cal_bp"
+    ):
         expected = _draws(idata, "expected_cal_bp")
         latent = _draws(idata, "latent_cal_bp")
 
@@ -531,7 +528,10 @@ def print_outlier_diagnostics(
     posterior_rank=None,
     n: int = 20,
 ) -> None:
-    if not (_posterior_has(idata, "p_outlier") or _posterior_has(idata, "p_outlier_reconstructed")):
+    if not (
+        _posterior_has(idata, "p_outlier")
+        or _posterior_has(idata, "p_outlier_reconstructed")
+    ):
         return
 
     rows = build_outlier_table(
@@ -595,6 +595,7 @@ def print_outlier_diagnostics(
         round(float(rows[p_col].max()), 3),
     )
 
+
 def build_parameter_diagnostics(
     idata: az.InferenceData,
     vars_: list[str] | None = None,
@@ -657,11 +658,7 @@ def build_parameter_diagnostics(
     if diag is None or diag.empty:
         return None
 
-    diag = (
-        diag
-        .reset_index(names="parameter")
-        .replace([np.inf, -np.inf], np.nan)
-    )
+    diag = diag.reset_index(names="parameter").replace([np.inf, -np.inf], np.nan)
 
     preferred = [
         "parameter",
@@ -680,6 +677,7 @@ def build_parameter_diagnostics(
     rest = [c for c in diag.columns if c not in cols]
 
     return diag[cols + rest]
+
 
 # -----------------------------------------------------------------------------
 # Divergences and worst parameters
@@ -724,6 +722,8 @@ def print_worst_parameter_diagnostics(
         try:
             s = _summary(idata, [var])
         except Exception:
+            # Some transformed or reconstructed variables can fail ArviZ summary
+            # generation in edge cases. Skip them in printed debug diagnostics.
             continue
 
         if s is None or s.empty:
@@ -743,7 +743,9 @@ def print_worst_parameter_diagnostics(
     diag = pd.concat(tables, ignore_index=True).replace([np.inf, -np.inf], np.nan)
 
     if "r_hat" in diag.columns:
-        worst = diag.dropna(subset=["r_hat"]).sort_values("r_hat", ascending=False).head(n)
+        worst = (
+            diag.dropna(subset=["r_hat"]).sort_values("r_hat", ascending=False).head(n)
+        )
         if not worst.empty:
             print("\nWorst individual parameters by R-hat:")
             print(worst.round(3).to_string(index=False))

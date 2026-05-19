@@ -204,7 +204,7 @@ def _prepare_outlier_prior(
 
     if len(out) != n_graves:
         raise ValueError(
-            "outlier_prior_by_grave must have one value per grave "
+            "outlier_prior_by_grave must have one value per assemblage "
             f"({n_graves} expected, got {len(out)})."
         )
 
@@ -280,12 +280,14 @@ def build_parametric_pymc_seriation_model(
         raise ValueError("chronology_mode must be 'none' or 'c14_typology_linked'.")
 
     if sigma_cal_link_upper <= sigma_cal_link_lower:
-        raise ValueError("sigma_cal_link_upper must be larger than sigma_cal_link_lower.")
+        raise ValueError(
+            "sigma_cal_link_upper must be larger than sigma_cal_link_lower."
+        )
 
     n_graves, n_types = Y.shape
 
-    # Fixed OxCal-style outlier component parameters.
-    # These are deliberately not exposed through the public API/CLI for now.
+    # Fixed outlier-mixture parameters. These are deliberately not exposed through
+    # the public API/CLI for now.
     outlier_scale = 5.0
     outlier_nu = 5.0
 
@@ -306,7 +308,7 @@ def build_parametric_pymc_seriation_model(
         ref_z = zscore_vector(orientation_reference, "orientation_reference")
 
         if len(ref_z) != n_graves:
-            raise ValueError("orientation_reference must have one value per grave.")
+            raise ValueError("orientation_reference must have one value per assemblage.")
 
         initvals["t_raw"] = ref_z
 
@@ -390,9 +392,8 @@ def build_parametric_pymc_seriation_model(
 
         # Smooth bounded parametrisation for sigma_cal_link:
         # unit value -> logit -> Normal on unconstrained scale -> sigmoid back.
-        sigma_cal_link_mu_unit = (
-            (sigma_cal_link_mu - sigma_cal_link_lower)
-            / (sigma_cal_link_upper - sigma_cal_link_lower)
+        sigma_cal_link_mu_unit = (sigma_cal_link_mu - sigma_cal_link_lower) / (
+            sigma_cal_link_upper - sigma_cal_link_lower
         )
         sigma_cal_link_mu_unit = float(
             np.clip(sigma_cal_link_mu_unit, 1e-4, 1.0 - 1e-4)
@@ -430,13 +431,13 @@ def build_parametric_pymc_seriation_model(
         if use_chronology:
             print(
                 f"\nC14/calendar model: linked IntCal20, "
-                f"dated graves {n_c14_dated}/{n_graves}, grid {len(cal_grid)}"
+                f"dated assemblages {n_c14_dated}/{n_graves}, grid {len(cal_grid)}"
             )
 
             if use_outlier_model:
                 print(
                     "outlier model: enabled for "
-                    f"{int(np.sum(outlier_prior_dated > 0.0))}/{n_c14_dated} dated graves"
+                    f"{int(np.sum(outlier_prior_dated > 0.0))}/{n_c14_dated} dated assemblages"
                 )
             else:
                 print("outlier model: disabled")
@@ -454,7 +455,7 @@ def build_parametric_pymc_seriation_model(
 
     with pm.Model(coords=coords) as model:
         # ------------------------------------------------------------------
-        # Latent grave axis
+        # Latent assemblage axis
         # ------------------------------------------------------------------
 
         t_raw = pm.Normal("t_raw", 0.0, 1.0, dims="grave")

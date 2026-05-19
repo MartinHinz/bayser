@@ -105,7 +105,7 @@ def orient_t_samples_to_reference(
     if t.ndim != 3:
         raise ValueError("t_samples must have shape (chain, draw, grave).")
     if t.shape[-1] != len(ref):
-        raise ValueError("reference length must match number of graves.")
+        raise ValueError("reference length must match number of assemblages.")
 
     flips = []
 
@@ -441,7 +441,7 @@ def compare_pymc_to_ra_scores(
     if len(posterior_t_mean) != len(ra_row_scores):
         raise ValueError("posterior_t_mean and ra_row_scores must have same length.")
     if len(grave_ids) != len(posterior_t_mean):
-        raise ValueError("grave_ids length must match score vectors.")
+        raise ValueError("grave_ids length must match the score vectors.")
 
     ra_oriented, ra_flipped, pearson_abs = orient_scores_to_reference(
         ra_row_scores,
@@ -548,11 +548,11 @@ def summarise_graves(
         prefix="posterior_cal_bp_cond_sd",
     )
 
-    # Optional OxCal-style outlier probabilities.
+    # Optional outlier-mixture probabilities.
     #
     # p_outlier is usually stored on c14_grave and is mapped back to grave_index.
     # p_outlier_reconstructed is usually stored on the full grave dimension, with
-    # NaN for non-dated or inactive graves depending on the reconstruction logic.
+    # NaN for non-dated or inactive rows depending on the reconstruction logic.ic.
     out = _add_probability_summary_by_grave(
         out,
         idata,
@@ -637,12 +637,10 @@ def summarise_types(
 
         out["ra_type_score_oriented"] = ra_oriented
         out["ra_type_rank"] = ra_type_rank
-        out["type_rank_difference_pymc_minus_ra"] = (
-            posterior_type_rank - ra_type_rank
-        )
-        out["abs_type_rank_difference_pymc_ra"] = (
-            out["type_rank_difference_pymc_minus_ra"].abs()
-        )
+        out["type_rank_difference_pymc_minus_ra"] = posterior_type_rank - ra_type_rank
+        out["abs_type_rank_difference_pymc_ra"] = out[
+            "type_rank_difference_pymc_minus_ra"
+        ].abs()
         out["ra_type_flipped"] = ra_flipped
         out["ra_type_orientation_target"] = "pymc_mu"
         out["ra_type_orientation_pearson_abs"] = ra_pearson
@@ -660,7 +658,7 @@ def order_from_summary(
     missing = [g for g in ordered_ids if g not in index]
     if missing:
         raise ValueError(
-            "Summary contains grave IDs not present in grave_ids: "
+            "Summary contains IDs not present in grave_ids: "
             + ", ".join(missing[:10])
         )
 

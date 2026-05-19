@@ -91,7 +91,9 @@ def iterative_reciprocal_averaging_order(
             break
 
         if previous_previous is not None and np.array_equal(X, previous_previous):
-            print("Warning: iterative RA caught in a two-step loop; accepting current order.")
+            print(
+                "Warning: iterative RA caught in a two-step loop; accepting current order."
+            )
             break
     else:
         print("Warning: iterative RA did not converge within max_iter.")

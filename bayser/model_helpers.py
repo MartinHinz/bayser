@@ -20,11 +20,11 @@ def spacing_repulsion(
     strength: float = 0.35,
     min_dist: float = 0.10,
 ) -> pt.TensorVariable:
-    """Softly discourage graves from occupying identical latent positions.
+    """Softly discourage assemblages from occupying identical latent positions.
 
     The pair indices are precomputed outside the PyMC graph. This avoids building
-    a full n_graves x n_graves distance matrix and triangular mask inside the
-    symbolic graph.
+    a full n_assemblages x n_assemblages distance matrix and triangular mask inside
+    the symbolic graph.
     """
 
     if strength <= 0:
@@ -32,9 +32,7 @@ def spacing_repulsion(
 
     d2 = (t[pair_i] - t[pair_j]) ** 2 + 1e-6
 
-    return -float(strength) * pt.sum(
-        pt.exp(-d2 / (2.0 * float(min_dist) ** 2))
-    )
+    return -float(strength) * pt.sum(pt.exp(-d2 / (2.0 * float(min_dist) ** 2)))
 
 
 def zscore_vector(x: np.ndarray, name: str) -> np.ndarray:
@@ -51,11 +49,7 @@ def zscore_vector(x: np.ndarray, name: str) -> np.ndarray:
 
 
 def normal_logpdf_pt(x, mu, sigma):
-    return (
-        -0.5 * pt.log(2.0 * np.pi)
-        - pt.log(sigma)
-        - 0.5 * ((x - mu) / sigma) ** 2
-    )
+    return -0.5 * pt.log(2.0 * np.pi) - pt.log(sigma) - 0.5 * ((x - mu) / sigma) ** 2
 
 
 def student_t_logpdf_pt(x, mu, sigma, nu: float = 5.0):
@@ -72,11 +66,7 @@ def student_t_logpdf_pt(x, mu, sigma, nu: float = 5.0):
 
 
 def normal_logpdf_np(x, mu, sigma):
-    return (
-        -0.5 * np.log(2.0 * np.pi)
-        - np.log(sigma)
-        - 0.5 * ((x - mu) / sigma) ** 2
-    )
+    return -0.5 * np.log(2.0 * np.pi) - np.log(sigma) - 0.5 * ((x - mu) / sigma) ** 2
 
 
 def student_t_logpdf_np(x, mu, sigma, nu: float = 5.0):
@@ -221,7 +211,9 @@ def prepare_c14_inputs(
         return empty_c14_inputs()
 
     if bp is None or err is None:
-        raise ValueError("c14_bp and c14_error must either both be supplied or both be None.")
+        raise ValueError(
+            "c14_bp and c14_error must either both be supplied or both be None."
+        )
 
     finite = np.isfinite(bp) & np.isfinite(err)
 
@@ -243,7 +235,9 @@ def prepare_c14_inputs(
 
     missing = {"cal_bp", "c14_age", "c14_sigma"}.difference(curve.columns)
     if missing:
-        raise ValueError("IntCal20 curve is missing columns: " + ", ".join(sorted(missing)))
+        raise ValueError(
+            "IntCal20 curve is missing columns: " + ", ".join(sorted(missing))
+        )
 
     curve = curve.sort_values("cal_bp")
 
@@ -317,7 +311,9 @@ def precompute_c14_loglikelihood_np(
         raise ValueError("observed_c14_error must be one-dimensional.")
 
     if len(observed_c14_bp) != len(observed_c14_error):
-        raise ValueError("observed_c14_bp and observed_c14_error must have equal length.")
+        raise ValueError(
+            "observed_c14_bp and observed_c14_error must have equal length."
+        )
 
     if c14_curve_age.ndim != 1 or c14_curve_sigma.ndim != 1:
         raise ValueError("c14_curve_age and c14_curve_sigma must be one-dimensional.")
@@ -358,9 +354,7 @@ def marginal_c14_loglike(
         sig = pt.as_tensor_variable(np.asarray(curve_sigma, dtype=float))
 
         total_sigma = pt.sqrt(
-            err[:, None] ** 2
-            + sig[None, :] ** 2
-            + float(extra_sigma) ** 2
+            err[:, None] ** 2 + sig[None, :] ** 2 + float(extra_sigma) ** 2
         )
 
         log_c14 = normal_logpdf_pt(bp[:, None], age[None, :], total_sigma)
@@ -379,8 +373,6 @@ def marginal_c14_loglike(
     )
 
     return log_num - log_den
-    #return log_num
-
 
 def marginalised_intcal20_logp(
     observed_c14_bp,
@@ -442,9 +434,7 @@ def marginalised_intcal20_logp(
         raise ValueError("outlier_prior must be one-dimensional.")
 
     if len(outlier_prior_np) != n_dated:
-        raise ValueError(
-            "outlier_prior must have one value per dated C14 observation."
-        )
+        raise ValueError("outlier_prior must have one value per dated C14 observation.")
 
     if np.any(~np.isfinite(outlier_prior_np)):
         raise ValueError("outlier_prior must contain only finite values.")
@@ -498,10 +488,7 @@ def marginalised_intcal20_logp(
 
     # Start with the regular likelihood for all dated observations, then replace
     # only the explicitly flagged observations by their mixture contribution.
-    logp = (
-        pt.sum(log_like_regular)
-        + pt.sum(log_mix_active - log_like_regular_active)
-    )
+    logp = pt.sum(log_like_regular) + pt.sum(log_mix_active - log_like_regular_active)
 
     p_outlier_active = pt.exp(log_outlier - log_mix_active)
 
@@ -637,11 +624,7 @@ def reconstruct_marginal_calendar_draws(
             sig_chunk[:, None, None],
         )
 
-        log_w_reg = (
-            log_c14[None, :, :]
-            + log_cal_reg
-            + log_grid_w[None, None, :]
-        )
+        log_w_reg = log_c14[None, :, :] + log_cal_reg + log_grid_w[None, None, :]
 
         log_den_reg = logsumexp(
             log_cal_reg + log_grid_w[None, None, :],
@@ -676,9 +659,7 @@ def reconstruct_marginal_calendar_draws(
                 axis=2,
             )
 
-            log_grid_out_norm_active = (
-                log_w_out_active - log_den_out_active[:, :, None]
-            )
+            log_grid_out_norm_active = log_w_out_active - log_den_out_active[:, :, None]
 
             log_grid_reg_norm_active = log_grid_reg_norm[:, active_idx, :]
 
@@ -691,28 +672,18 @@ def reconstruct_marginal_calendar_draws(
                 axis=2,
             )
 
-            log_regular_comp = (
-                np.log1p(-p_active)[None, :]
-                + log_marg_reg_active
-            )
-            log_outlier_comp = (
-                np.log(p_active)[None, :]
-                + log_marg_out_active
-            )
+            log_regular_comp = np.log1p(-p_active)[None, :] + log_marg_reg_active
+            log_outlier_comp = np.log(p_active)[None, :] + log_marg_out_active
             log_mix_marg = np.logaddexp(
                 log_regular_comp,
                 log_outlier_comp,
             )
 
-            p_d[start:stop, active_idx] = np.exp(
-                log_outlier_comp - log_mix_marg
-            )
+            p_d[start:stop, active_idx] = np.exp(log_outlier_comp - log_mix_marg)
 
             log_grid_mix_active = np.logaddexp(
-                np.log1p(-p_active)[None, :, None]
-                + log_grid_reg_norm_active,
-                np.log(p_active)[None, :, None]
-                + log_grid_out_norm_active,
+                np.log1p(-p_active)[None, :, None] + log_grid_reg_norm_active,
+                np.log(p_active)[None, :, None] + log_grid_out_norm_active,
             )
 
             log_w[:, active_idx, :] = log_grid_mix_active
@@ -803,14 +774,3 @@ def store_model_attrs(idata: az.InferenceData, **settings) -> az.InferenceData:
             idata.attrs[key] = value
 
     return idata
-
-
-# -----------------------------------------------------------------------------
-# Backwards-compatible private aliases for the current model.py transition
-# -----------------------------------------------------------------------------
-
-
-_zscore = zscore_vector
-_empty_c14 = empty_c14_inputs
-_prepare_c14 = prepare_c14_inputs
-_store_attrs = store_model_attrs
