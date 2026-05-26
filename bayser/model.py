@@ -242,7 +242,7 @@ def build_parametric_pymc_seriation_model(
     cal_span_mu: float | None = None,
     cal_span_sigma: float = 80.0,
     cal_span_lower: float = 5.0,
-    cal_span_upper: float = 220.0,
+    cal_span_upper: float = 1220.0,
     sigma_cal_link_mu: float = 60.0,
     sigma_cal_link_sigma: float = 35.0,
     sigma_cal_link_lower: float = 15.0,
@@ -389,6 +389,14 @@ def build_parametric_pymc_seriation_model(
         if cal_span_mu is None:
             q10, q90 = np.nanquantile(rough_cal_bp, [0.10, 0.90])
             cal_span_mu = float(np.clip((q90 - q10) / 4.0, 20.0, 120.0))
+
+        if cal_span_upper is None:
+            cal_span_upper = max(
+                cal_span_mu + 3.0 * cal_span_sigma,
+                2.5 * cal_span_mu,
+                120.0,
+            )
+            cal_span_upper = float(np.clip(cal_span_upper, 120.0, 800.0))
 
         # Smooth bounded parametrisation for sigma_cal_link:
         # unit value -> logit -> Normal on unconstrained scale -> sigmoid back.
@@ -724,7 +732,7 @@ def fit_parametric_pymc_seriation(
     cal_span_mu: float | None = None,
     cal_span_sigma: float = 80.0,
     cal_span_lower: float = 5.0,
-    cal_span_upper: float = 220.0,
+    cal_span_upper: float | None = None,
     sigma_cal_link_mu: float = 60.0,
     sigma_cal_link_sigma: float = 35.0,
     sigma_cal_link_lower: float = 15.0,
